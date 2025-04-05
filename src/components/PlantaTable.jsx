@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, MenuItem, Stack
+  Paper, MenuItem, Stack, Snackbar, Alert
 } from "@mui/material";
+import { fetchFromAPI, postToAPI, putToAPI, deleteFromAPI } from "../utils/api";
 
 export default function PlantaTable() {
   const [plantas, setPlantas] = useState([]);
   const [contratos, setContratos] = useState([]);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -18,14 +19,30 @@ export default function PlantaTable() {
   const [localizacion, setLocalizacion] = useState("");
   const [contratoId, setContratoId] = useState("");
 
+  const mostrarSnackbar = (mensaje, severidad = "success") => {
+    setSnackbar({
+      open: true,
+      message: mensaje,
+      severity: severidad
+    });
+  };
+
   const fetchPlantas = async () => {
-    const res = await axios.get("http://localhost:8000/plantas/");
-    setPlantas(res.data);
+    try {
+      const data = await fetchFromAPI("/plantas/");
+      setPlantas(data);
+    } catch (error) {
+      mostrarSnackbar("Error al cargar plantas", "error");
+    }
   };
 
   const fetchContratos = async () => {
-    const res = await axios.get("http://localhost:8000/contratos/");
-    setContratos(res.data);
+    try {
+      const data = await fetchFromAPI("/contratos/");
+      setContratos(data);
+    } catch (error) {
+      mostrarSnackbar("Error al cargar contratos", "error");
+    }
   };
 
   const handleOpen = (planta = null) => {
@@ -52,25 +69,38 @@ export default function PlantaTable() {
   };
 
   const savePlanta = async () => {
-    const payload = {
-      nombre,
-      descripcion,
-      municipio,
-      localizacion,
-      contrato_id: Number(contratoId),
-    };
-    if (editId) {
-      await axios.put(`http://localhost:8000/plantas/${editId}`, payload);
-    } else {
-      await axios.post("http://localhost:8000/plantas/", payload);
+    try {
+      const payload = {
+        nombre,
+        descripcion,
+        municipio,
+        localizacion,
+        contrato_id: Number(contratoId),
+      };
+      
+      if (editId) {
+        await putToAPI(`/plantas/${editId}`, payload);
+        mostrarSnackbar("Planta actualizada con éxito");
+      } else {
+        await postToAPI("/plantas/", payload);
+        mostrarSnackbar("Planta creada con éxito");
+      }
+      
+      fetchPlantas();
+      handleClose();
+    } catch (error) {
+      mostrarSnackbar("Error al guardar planta", "error");
     }
-    fetchPlantas();
-    handleClose();
   };
 
   const deletePlanta = async (id) => {
-    await axios.delete(`http://localhost:8000/plantas/${id}`);
-    fetchPlantas();
+    try {
+      await deleteFromAPI(`/plantas/${id}`);
+      mostrarSnackbar("Planta eliminada con éxito");
+      fetchPlantas();
+    } catch (error) {
+      mostrarSnackbar("Error al eliminar planta", "error");
+    }
   };
 
   useEffect(() => {
@@ -98,21 +128,27 @@ export default function PlantaTable() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {plantas.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>{p.nombre}</TableCell>
-                <TableCell>{p.descripcion}</TableCell>
-                <TableCell>{p.municipio}</TableCell>
-                <TableCell>{p.localizacion}</TableCell>
-                <TableCell>{contratos.find(c => c.id === p.contrato_id)?.nombre || "—"}</TableCell>
-                <TableCell align="center">
-                  <Stack direction="row" spacing={1} justifyContent="center">
-                    <Button variant="outlined" onClick={() => handleOpen(p)}>Editar</Button>
-                    <Button variant="outlined" color="error" onClick={() => deletePlanta(p.id)}>Eliminar</Button>
-                  </Stack>
-                </TableCell>
+            {plantas.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} align="center">No hay plantas registradas</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              plantas.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.nombre}</TableCell>
+                  <TableCell>{p.descripcion}</TableCell>
+                  <TableCell>{p.municipio}</TableCell>
+                  <TableCell>{p.localizacion}</TableCell>
+                  <TableCell>{contratos.find(c => c.id === p.contrato_id)?.nombre || "—"}</TableCell>
+                  <TableCell align="center">
+                    <Stack direction="row" spacing={1} justifyContent="center">
+                      <Button variant="outlined" onClick={() => handleOpen(p)}>Editar</Button>
+                      <Button variant="outlined" color="error" onClick={() => deletePlanta(p.id)}>Eliminar</Button>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -156,6 +192,7 @@ export default function PlantaTable() {
             value={contratoId}
             onChange={(e) => setContratoId(e.target.value)}
           >
+            <MenuItem value="">Seleccionar contrato</MenuItem>
             {contratos.map((c) => (
               <MenuItem key={c.id} value={c.id}>{c.nombre}</MenuItem>
             ))}
@@ -163,9 +200,29 @@ export default function PlantaTable() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancelar</Button>
-          <Button variant="contained" onClick={savePlanta}>Guardar</Button>
+          <Button 
+            variant="contained" 
+            onClick={savePlanta}
+            disabled={!nombre || !municipio || !contratoId}
+          >
+            Guardar
+          </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={4000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

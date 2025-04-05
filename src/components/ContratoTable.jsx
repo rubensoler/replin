@@ -3,27 +3,45 @@ import axios from "axios";
 import {
   Box, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, MenuItem, Stack
+  Paper, Stack, Snackbar, Alert
 } from "@mui/material";
+import ClienteSelector from "./ClienteSelector";
 
 export default function ContratoTable() {
   const [contratos, setContratos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [clienteId, setClienteId] = useState("");
 
   const fetchContratos = async () => {
-    const res = await axios.get("http://localhost:8000/contratos/");
-    setContratos(res.data);
+    try {
+      const res = await axios.get("http://localhost:8000/contratos/");
+      setContratos(res.data);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al cargar contratos: " + error.message,
+        severity: "error"
+      });
+    }
   };
 
   const fetchClientes = async () => {
-    const res = await axios.get("http://localhost:8000/clientes/");
-    setClientes(res.data);
+    try {
+      const res = await axios.get("http://localhost:8000/clientes/");
+      setClientes(res.data);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al cargar clientes: " + error.message,
+        severity: "error"
+      });
+    }
   };
 
   const handleOpen = (contrato = null) => {
@@ -46,23 +64,55 @@ export default function ContratoTable() {
   };
 
   const saveContrato = async () => {
-    const payload = {
-      nombre,
-      descripcion,
-      cliente_id: Number(clienteId),
-    };
-    if (editId) {
-      await axios.put(`http://localhost:8000/contratos/${editId}`, payload);
-    } else {
-      await axios.post("http://localhost:8000/contratos/", payload);
+    try {
+      const payload = {
+        nombre,
+        descripcion,
+        cliente_id: Number(clienteId),
+      };
+      
+      if (editId) {
+        await axios.put(`http://localhost:8000/contratos/${editId}`, payload);
+        setSnackbar({
+          open: true,
+          message: "Contrato actualizado correctamente",
+          severity: "success"
+        });
+      } else {
+        await axios.post("http://localhost:8000/contratos/", payload);
+        setSnackbar({
+          open: true,
+          message: "Contrato creado correctamente",
+          severity: "success"
+        });
+      }
+      fetchContratos();
+      handleClose();
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al guardar contrato: " + error.message,
+        severity: "error"
+      });
     }
-    fetchContratos();
-    handleClose();
   };
 
   const deleteContrato = async (id) => {
-    await axios.delete(`http://localhost:8000/contratos/${id}`);
-    fetchContratos();
+    try {
+      await axios.delete(`http://localhost:8000/contratos/${id}`);
+      setSnackbar({
+        open: true,
+        message: "Contrato eliminado correctamente",
+        severity: "success"
+      });
+      fetchContratos();
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al eliminar contrato: " + error.message,
+        severity: "error"
+      });
+    }
   };
 
   useEffect(() => {
@@ -84,7 +134,6 @@ export default function ContratoTable() {
               <TableCell>Nombre</TableCell>
               <TableCell>Descripción</TableCell>
               <TableCell>Cliente</TableCell>
-              <TableCell>Plantas</TableCell>
               <TableCell align="center">Acciones</TableCell>
             </TableRow>
           </TableHead>
@@ -94,7 +143,6 @@ export default function ContratoTable() {
                 <TableCell>{c.nombre}</TableCell>
                 <TableCell>{c.descripcion}</TableCell>
                 <TableCell>{clientes.find(cl => cl.id === c.cliente_id)?.nombre || "—"}</TableCell>
-                <TableCell>{c.plantas?.map(p => p.nombre).join(", ") || "—"}</TableCell>
                 <TableCell align="center">
                   <Stack direction="row" spacing={1} justifyContent="center">
                     <Button variant="outlined" onClick={() => handleOpen(c)}>Editar</Button>
@@ -116,6 +164,7 @@ export default function ContratoTable() {
             label="Nombre"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
+            required
           />
           <TextField
             fullWidth
@@ -123,25 +172,41 @@ export default function ContratoTable() {
             label="Descripción"
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
+            multiline
+            rows={3}
           />
-          <TextField
-            select
-            fullWidth
-            margin="dense"
-            label="Cliente"
+          <ClienteSelector
             value={clienteId}
             onChange={(e) => setClienteId(e.target.value)}
-          >
-            {clientes.map((cl) => (
-              <MenuItem key={cl.id} value={cl.id}>{cl.nombre}</MenuItem>
-            ))}
-          </TextField>
+            required
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancelar</Button>
-          <Button variant="contained" onClick={saveContrato}>Guardar</Button>
+          <Button 
+            variant="contained" 
+            onClick={saveContrato}
+            disabled={!nombre || !clienteId}
+          >
+            Guardar
+          </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({...snackbar, open: false})}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({...snackbar, open: false})} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

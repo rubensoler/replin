@@ -1,23 +1,33 @@
 import { useEffect, useState } from "react";
 import {
   Box, Typography, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, TextField, Button, IconButton
+  TableHead, TableRow, Paper, TextField, Button, IconButton,
+  Snackbar, Alert
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CancelIcon from "@mui/icons-material/Cancel";
-import axios from "axios";
+import { fetchFromAPI, postToAPI, putToAPI, deleteFromAPI } from "../utils/api";
 
 export default function ClienteTable() {
   const [clientes, setClientes] = useState([]);
   const [nuevoCliente, setNuevoCliente] = useState({ nombre: "", descripcion: "" });
   const [editando, setEditando] = useState(null);
   const [editCliente, setEditCliente] = useState({});
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
 
   const fetchClientes = async () => {
-    const res = await axios.get("http://localhost:8000/clientes/");
-    setClientes(res.data);
+    try {
+      const data = await fetchFromAPI("/clientes/");
+      setClientes(data);
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al cargar clientes",
+        severity: "error"
+      });
+    }
   };
 
   useEffect(() => {
@@ -30,21 +40,64 @@ export default function ClienteTable() {
   };
 
   const crearCliente = async () => {
-    await axios.post("http://localhost:8000/clientes/", nuevoCliente);
-    setNuevoCliente({ nombre: "", descripcion: "" });
-    fetchClientes();
+    try {
+      await postToAPI("/clientes/", nuevoCliente);
+      setNuevoCliente({ nombre: "", descripcion: "" });
+      fetchClientes();
+      setSnackbar({
+        open: true,
+        message: "Cliente creado con éxito",
+        severity: "success"
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al crear cliente",
+        severity: "error"
+      });
+    }
   };
 
   const actualizarCliente = async (id) => {
-    await axios.put(`http://localhost:8000/clientes/${id}`, editCliente);
-    setEditando(null);
-    setEditCliente({});
-    fetchClientes();
+    try {
+      await putToAPI(`/clientes/${id}`, editCliente);
+      setEditando(null);
+      setEditCliente({});
+      fetchClientes();
+      setSnackbar({
+        open: true,
+        message: "Cliente actualizado con éxito",
+        severity: "success"
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al actualizar cliente",
+        severity: "error"
+      });
+    }
   };
 
   const eliminarCliente = async (id) => {
-    await axios.delete(`http://localhost:8000/clientes/${id}`);
-    fetchClientes();
+    try {
+      await deleteFromAPI(`/clientes/${id}`);
+      fetchClientes();
+      setSnackbar({
+        open: true,
+        message: "Cliente eliminado con éxito",
+        severity: "success"
+      });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Error al eliminar cliente",
+        severity: "error"
+      });
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   return (
@@ -54,11 +107,25 @@ export default function ClienteTable() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1">Crear nuevo cliente:</Typography>
         <Box display="flex" gap={2} alignItems="center" mt={1}>
-          <TextField label="Nombre" name="nombre" value={nuevoCliente.nombre}
-            onChange={(e) => handleChange(e, nuevoCliente, setNuevoCliente)} />
-          <TextField label="Descripción" name="descripcion" value={nuevoCliente.descripcion}
-            onChange={(e) => handleChange(e, nuevoCliente, setNuevoCliente)} />
-          <Button variant="contained" onClick={crearCliente}>Crear</Button>
+          <TextField 
+            label="Nombre" 
+            name="nombre" 
+            value={nuevoCliente.nombre}
+            onChange={(e) => handleChange(e, nuevoCliente, setNuevoCliente)} 
+          />
+          <TextField 
+            label="Descripción" 
+            name="descripcion" 
+            value={nuevoCliente.descripcion}
+            onChange={(e) => handleChange(e, nuevoCliente, setNuevoCliente)} 
+          />
+          <Button 
+            variant="contained" 
+            onClick={crearCliente} 
+            disabled={!nuevoCliente.nombre}
+          >
+            Crear
+          </Button>
         </Box>
       </Paper>
 
@@ -72,45 +139,89 @@ export default function ClienteTable() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {clientes.map((cliente) => (
-              <TableRow key={cliente.id}>
-                <TableCell>
-                  {editando === cliente.id ? (
-                    <TextField name="nombre" value={editCliente.nombre}
-                      onChange={(e) => handleChange(e, editCliente, setEditCliente)} />
-                  ) : (
-                    cliente.nombre
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editando === cliente.id ? (
-                    <TextField name="descripcion" value={editCliente.descripcion}
-                      onChange={(e) => handleChange(e, editCliente, setEditCliente)} />
-                  ) : (
-                    cliente.descripcion
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editando === cliente.id ? (
-                    <>
-                      <IconButton onClick={() => actualizarCliente(cliente.id)}><SaveIcon /></IconButton>
-                      <IconButton onClick={() => setEditando(null)}><CancelIcon /></IconButton>
-                    </>
-                  ) : (
-                    <>
-                      <IconButton onClick={() => {
-                        setEditando(cliente.id);
-                        setEditCliente({ nombre: cliente.nombre, descripcion: cliente.descripcion });
-                      }}><EditIcon /></IconButton>
-                      <IconButton onClick={() => eliminarCliente(cliente.id)}><DeleteIcon /></IconButton>
-                    </>
-                  )}
-                </TableCell>
+            {clientes.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} align="center">No hay clientes registrados</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              clientes.map((cliente) => (
+                <TableRow key={cliente.id}>
+                  <TableCell>
+                    {editando === cliente.id ? (
+                      <TextField 
+                        name="nombre" 
+                        value={editCliente.nombre}
+                        onChange={(e) => handleChange(e, editCliente, setEditCliente)} 
+                      />
+                    ) : (
+                      cliente.nombre
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editando === cliente.id ? (
+                      <TextField 
+                        name="descripcion" 
+                        value={editCliente.descripcion}
+                        onChange={(e) => handleChange(e, editCliente, setEditCliente)} 
+                      />
+                    ) : (
+                      cliente.descripcion
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editando === cliente.id ? (
+                      <>
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => actualizarCliente(cliente.id)}
+                          disabled={!editCliente.nombre}
+                        >
+                          <SaveIcon />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => setEditando(null)}>
+                          <CancelIcon />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <>
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => {
+                            setEditando(cliente.id);
+                            setEditCliente({ 
+                              nombre: cliente.nombre, 
+                              descripcion: cliente.descripcion || "" 
+                            });
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton color="error" onClick={() => eliminarCliente(cliente.id)}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={4000} 
+        onClose={handleCloseSnackbar}
+      >
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity} 
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
